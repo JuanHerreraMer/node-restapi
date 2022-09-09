@@ -1,6 +1,7 @@
-import { json, response } from 'express';
 import bcrypt from 'bcryptjs';
-import { getConnection, authQuerys, sql } from '../database';
+import { response } from 'express';
+import { authQuerys, getConnection, sql } from '../database';
+import { generarJWT } from '../helpers/jwt';
 
 const nameController = 'authController'
 
@@ -41,23 +42,50 @@ export const loginUser = async(req, res = response) => {
         // const { recordset } = await pool.request().query( authQuerys.getUserByRut );
         const result = await pool.request()
                             .input('Id', sql.Int, undefined)
-                            .execute(authQuerys.sp_control_FuncionariosSelect)
+                            .execute(authQuerys.sp_control_FuncionariosSelect);
 
                             pool.close();
 
-        const userLogin = result.recordset.filter( ({Rut, Clave}) => Rut === rut && Clave === password );
+        let user = result.recordset.filter(({Rut}) => Rut === rut);
+        if( user.length > 0 ){
+            user = user.reduce( acc => { return acc });
+        }else{
+            return res.status(400).json({
+                ok: false,
+                msg: 'Error en credenciales'
+            })
+        }
 
-            if(userLogin.length <= 0){
-                return res.status(400).json({
-                    ok: false,
-                    msg: 'Credenciales incorrectas'
-                })
-            }
+        const validPassword = bcrypt.compareSync( password, user.Clave )
+        if( !validPassword ){
+            return res.status(400).json({
+                ok: false,
+                msg: 'Error en credenciales'
+            })
+        }
+         
+        // Genera Token
+        const token = await generarJWT( user.ID, user.Correo );
         
+
+        const { ID, Rut, Nombre, Empresa, Correo, Estado } = user;
+
+        if(Estado !== 'ACTIVO'){
+            return res.status(400).json({
+                ok: false,
+                msg: 'Por favor hablar con RRHH - blocked user'
+            })
+        }
+
         res.json({
             ok: true,
-            idUser: userLogin,
-
+            ID,
+            Rut,
+            Nombre,
+            Empresa,
+            Correo,
+            Estado,
+            token
         })
 
     } catch (error) {
@@ -73,10 +101,14 @@ export const loginUser = async(req, res = response) => {
 export const createNewUser = async(req, res = response) => {
 
     try {
-        const { rut, empresa, correo } = req.body;
+        const { rut, nombre, empresa, correo } = req.body;
 
         const rutReloj = rut.split('-')[0];
-        const clave = rut.substring(0, 4);
+
+        // Encriptar contraseña
+        const salt = bcrypt.genSaltSync();
+        const clave = bcrypt.hashSync( rut.substring(0, 4), salt );
+
         const estado = 'ACTIVO';
 
         const pool = await getConnection();
@@ -94,6 +126,7 @@ export const createNewUser = async(req, res = response) => {
 
         const result = await pool.request()
                                 .input('rut', sql.VarChar, rut)
+                                .input('nombre', sql.VarChar, nombre)
                                 .input('rutReloj', sql.VarChar, rutReloj)
                                 .input('empresa', sql.VarChar, empresa)
                                 .input('clave', sql.VarChar, clave)
@@ -103,12 +136,16 @@ export const createNewUser = async(req, res = response) => {
 
         pool.close();
 
+        // Genera Token
+        // const token = await generarJWT( rut, correo );
+
         const { rowsAffected, recordset } = result;
 
         res.json({
             ok: true,
             idUser: recordset ? recordset[0].ID : 0,
-            rowsAffected
+            rowsAffected,
+            // token
         })
 
     } catch (error) {
@@ -148,6 +185,7 @@ export const getUserById = async(req, res = response) => {
     }
 
 }
+
 export const deleteUserById = async(req, res = response) => {
 
     const { id } = req.params;
@@ -173,6 +211,7 @@ export const deleteUserById = async(req, res = response) => {
     }
 
 }
+
 export const updateUserById = async(req, res = response) => {
 
     try {
@@ -180,11 +219,15 @@ export const updateUserById = async(req, res = response) => {
         const { id } = req.params;
         const { empresa, clave, correo, estado } = req.body;
 
+        // Encriptar contraseña
+        const salt = bcrypt.genSaltSync();
+        const nuevaPassword = bcrypt.hashSync( clave, salt );
+
         const pool = await getConnection();
         const result = await pool.request()
                                 .input('id', sql.Int, id)
                                 .input('empresa', sql.VarChar, empresa)
-                                .input('clave', sql.VarChar, clave)
+                                .input('clave', sql.VarChar, nuevaPassword)
                                 .input('correo', sql.VarChar, correo)
                                 .input('estado', sql.VarChar, estado)
                                 .query( authQuerys.updateUserById );

@@ -7,7 +7,7 @@ export const authQuerys = {
     getUserById: 'SELECT * FROM control_Funcionarios WHERE ID = @id',
     getUserByRut: 'SELECT * FROM control_Funcionarios WHERE Rut = @rut',
     deleteUserById: 'DELETE FROM control_Funcionarios WHERE ID = @id',
-    createNewUser: 'INSERT INTO control_Funcionarios OUTPUT Inserted.ID VALUES(@rut, @rutReloj, @empresa, @clave, @correo, @estado)',
+    createNewUser: 'INSERT INTO control_Funcionarios OUTPUT Inserted.ID VALUES(@rut, @nombre, @rutReloj, @empresa, @clave, @correo, @estado)',
     updateUserById: `
                         UPDATE 
                             control_Funcionarios 

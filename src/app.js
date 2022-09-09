@@ -3,8 +3,8 @@ import cors from 'cors';
 import config from './config';
 
 // Import .routes
-import prod from './routes/products.routes'
 import auth from './routes/auth.routes'
+import marcas from './routes/marcas.routes'
 
 
 // crear el servidor de express
@@ -21,8 +21,8 @@ app.use( express.json() )
 // app.use( express.urlencoded({extended: false}) )
 
 // Use Rutas
-app.use('/api/webstore', prod );
 app.use('/api/auth', auth );
+app.use('/api/registro', marcas );
 
 app.get('*', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
